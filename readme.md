@@ -117,8 +117,8 @@ List the postrouting filter chain in spamhaus table.
 
 ## work-to-do
 
--[] configuration handling
--[] check for IPv4 and/or IPv6
--[] do some error handling
--[] do more testing
--[] performance testing
+- [ ] configuration handling
+- [ ] check for IPv4 and/or IPv6
+- [ ] do some error handling
+- [ ] do more testing
+- [ ] performance testing
