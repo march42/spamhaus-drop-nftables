@@ -28,20 +28,18 @@ define('myComment', 'load spamhaus DROP to netfilter set, see https://github.com
  */
 
 /*	spamhaus-drop.php
-**	Version 20240930
-**	(C) Copyright 2024 by Marc Hefter <marchefter@march42.net>
 **	***
 **  * configuration variables in environment
 **  SPAMHAUS_DROP_noIPV4
 **  SPAMHAUS_DROP_noIPV6
 **  SPAMHAUS_DROP_useTIMEOUT
 **  SPAMHAUS_DROP_useCOUNTER
-**  if variable set in environment
 **	* use as script
 **	php spamhaus-drop.php --help --prepare --refresh --clear
 **	--prepare	prepare netfilter firewall table
-**	--refresh	load new list and apply to netfilter
 **	--clear		clear the netfilter table
+**	--flush		flush the named sets
+**	--refresh	load new list and apply to netfilter
 **	* import as library
 **	require_once('spamhaus-drop.php');
 **	require('spamhaus-drop.php');
@@ -267,8 +265,8 @@ class spamhaus_DROP
 //	running from CLI
 if ( (PHP_SAPI == "cli" && defined('STDIN')) && $_SERVER['argc'] >= 1 ) {
 	// startet with arguments
-	$shortOptions = "h" . "p" . "r" . "c";
-	$longOptions = array('help','prepare','refresh','clear');
+	$shortOptions = "h" . "p" . "r" . "c" . "f";
+	$longOptions = array('help','prepare','refresh','clear','flush');
 	$options = getopt($shortOptions,$longOptions);
 	// run
 	if (count($options) == 0 || array_key_exists("help",$options) || array_key_exists("h",$options)) {
@@ -277,6 +275,7 @@ if ( (PHP_SAPI == "cli" && defined('STDIN')) && $_SERVER['argc'] >= 1 ) {
 		echo '--help, -h', "\t", 'show this help page', PHP_EOL;
 		echo '--clear, -c', "\t", 'remove netfilter table', PHP_EOL;
 		echo '--prepare, -p', "\t", 'prepare netfilter table', PHP_EOL;
+		echo '--flush, -f', "\t", 'flush netfilter sets', PHP_EOL;
 		echo '--refresh, -r', "\t", 'refresh DROP', PHP_EOL;
 		// error out
 		http_response_code(200);
@@ -297,6 +296,9 @@ if ( (PHP_SAPI == "cli" && defined('STDIN')) && $_SERVER['argc'] >= 1 ) {
 		}
 		if (array_key_exists("prepare",$options) || array_key_exists("p",$options)) {
 			$DROP->prepareRules();
+		}
+		if (array_key_exists("flush",$options) || array_key_exists("f",$options)) {
+			$DROP->flushSets();
 		}
 		if (array_key_exists("refresh",$options) || array_key_exists("r",$options)) {
 			$DROP->loadElements();	// will always prepare rules and/or flush sets
