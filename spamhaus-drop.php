@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('myName', 'spamhaus-drop.php');
-define('myVersion', '20241001');
+define('myVersion', '20241002');
 define('myComment', 'load spamhaus DROP to netfilter set, see https://github.com/march42/spamhaus-drop-nftables');
 
 /**
@@ -31,24 +31,25 @@ define('myComment', 'load spamhaus DROP to netfilter set, see https://github.com
 **	Version 20240930
 **	(C) Copyright 2024 by Marc Hefter <marchefter@march42.net>
 **	***
-**	* import as library
-**	require_once('spamhaus-drop.php');
-**	require('spamhaus-drop.php');
-**	include('spamhaus-drop.php');
-**	* use as script
-**	php spamhaus-drop.php --help --prepare --refresh --clear
-**	--prepare	prepare netfilter firewall table
-**	--refresh	load new list and apply to netfilter
-**	--clear		clear the netfilter table
 **  * configuration variables in environment
 **  SPAMHAUS_DROP_noIPV4
 **  SPAMHAUS_DROP_noIPV6
 **  SPAMHAUS_DROP_useTIMEOUT
 **  SPAMHAUS_DROP_useCOUNTER
 **  if variable set in environment
+**	* use as script
+**	php spamhaus-drop.php --help --prepare --refresh --clear
+**	--prepare	prepare netfilter firewall table
+**	--refresh	load new list and apply to netfilter
+**	--clear		clear the netfilter table
+**	* import as library
+**	require_once('spamhaus-drop.php');
+**	require('spamhaus-drop.php');
+**	include('spamhaus-drop.php');
 */
 
 //	PHP should be >=8.0, <8.4
+//	there is no specific need, just did not test others
 if (80000 >= PHP_VERSION_ID || 80400 <= PHP_VERSION_ID) {
 	http_response_code(500);
 	echo 'Your current PHP version ' . PHP_VERSION . ' is unsupported.';
@@ -82,6 +83,7 @@ class spamhaus_DROP
 		'https://www.spamhaus.org/drop/drop_v6.json',
 		#'https://www.spamhaus.org/drop/asndrop.json',
 	);
+	protected $lastError = false;		// no error
     protected $dropList = null;			// the actual DROP list loaded from URI
     protected $curlReturn = null;		// the returned file time
     protected $listTimestamp = null;	// the cURL return code
@@ -89,26 +91,27 @@ class spamhaus_DROP
 	protected $lastExecOutput = null;	// output array for exec calls
 	protected $lastExecReturn = null;	// return code for exec calls
 	//	constructor, destructor
-	/*	constructor
-	**	***
-	**	$elementTimeout=-1	-1 is no timeout, else string 3d or 72h
-	**	$resetRules=false	delete and reprepare rules
-	**	$cachePath=null		filepath, to cache lists
-	*/
-	public function __construct($elementTimeout=-1, $resetRules=false, $cachePath=null) {
+	public function __construct($listURI=null) {
+		if($listURI)
+			$this->loadJson($listURI);
 	}
 	public function __destruct() {
 	}
 	//	methods
-	function __exec($command=null) {
+	function __exec($command=null, $showError=false) {
         // throw ValueError if no command given
-        unset($this->lastExecOutput);
+        unset($this->lastExecOutput);	// do not append to output
         unset($this->lastExecReturn);
-		return( exec( $command, $this->lastExecOutput, $this->lastExecReturn ) );
+		$returnCode = exec($command . ($showError ? "" : " 2> /dev/null"), $this->lastExecOutput, $this->lastExecReturn);
+		if ($returnCode != 0) {
+			// error handling
+			$this->lastError = "exec failed (code " . $returnCode . ")";
+		}
+		return( $returnCode );
 	}
 	public function deleteRules() {
         // check table does exist
-        if ( $this->__exec('nft list table inet spamhaus 2> /dev/null') ) {
+        if ( $this->__exec('nft list table inet spamhaus') ) {
             // delete table
             $this->__exec('nft delete table inet spamhaus');
         }
@@ -117,12 +120,12 @@ class spamhaus_DROP
 	}
 	public function prepareRules() {
         // check table does not exist
-        if ( ! $this->__exec('nft list table inet spamhaus 2> /dev/null') ) {
+        if ( ! $this->__exec('nft list table inet spamhaus') ) {
             // add table
             $this->__exec('nft add table inet spamhaus');
         }
         // check named set does not exist
-        if ( ! $this->__exec('nft list set inet spamhaus drop_ipv4 2> /dev/null') ) {
+        if ( ! $this->__exec('nft list set inet spamhaus drop_ipv4') ) {
             // add named set
             $this->__exec('nft add set inet spamhaus drop_ipv4 \{ type ipv4_addr\; flags interval, timeout\; auto-merge\; comment \"SPAMHAUS do not route or peer\"\; \}');
         }
@@ -130,7 +133,7 @@ class spamhaus_DROP
             $this->__exec('nft flush set inet spamhaus drop_ipv4');
         }*/
         // check named set does not exist
-        if ( ! $this->__exec('nft list set inet spamhaus drop_ipv6 2> /dev/null') ) {
+        if ( ! $this->__exec('nft list set inet spamhaus drop_ipv6') ) {
             // add named set
             $this->__exec('nft add set inet spamhaus drop_ipv6 \{ type ipv6_addr\; flags interval, timeout\; auto-merge\; comment \"SPAMHAUS do not route or peer\"\; \}');
         }
@@ -138,7 +141,7 @@ class spamhaus_DROP
             $this->__exec('nft flush set inet spamhaus drop_ipv6');
         }*/
         // check chain does not exist
-        if ( ! $this->__exec('nft list chain inet spamhaus prerouting 2> /dev/null') ) {
+        if ( ! $this->__exec('nft list chain inet spamhaus prerouting') ) {
             // add chain
             $this->__exec('nft add chain inet spamhaus prerouting \{ type filter hook prerouting priority -100\; \}');
             // add rules
@@ -148,7 +151,7 @@ class spamhaus_DROP
             $this->__exec('nft add rule inet spamhaus prerouting ip6 daddr @drop_ipv6 counter drop');
         }
         // check chain does not exist
-        if ( ! $this->__exec('nft list chain inet spamhaus postrouting 2> /dev/null') ) {
+        if ( ! $this->__exec('nft list chain inet spamhaus postrouting') ) {
             // add chain
             $this->__exec('nft add chain inet spamhaus postrouting \{ type filter hook postrouting priority 100\; \}');
             // add rules
@@ -156,30 +159,32 @@ class spamhaus_DROP
             $this->__exec('nft add rule inet spamhaus postrouting ip6 daddr @drop_ipv6 counter drop');
         }
         // return
-        return($this->__exec('nft list chain inet spamhaus prerouting 2> /dev/null'));
+        return($this->__exec('nft list chain inet spamhaus prerouting'));
 	}
 	public function flushSets() {
         // check named set does exist
-        if ( $this->__exec('nft list set inet spamhaus drop_ipv4 2> /dev/null') ) {
+        if ( $this->__exec('nft list set inet spamhaus drop_ipv4') ) {
             // flush named set
             $this->__exec('nft flush set inet spamhaus drop_ipv4');
         }
         // check named set does exist
-        if ( ! $this->__exec('nft list set inet spamhaus drop_ipv6 2> /dev/null') ) {
+        if ( ! $this->__exec('nft list set inet spamhaus drop_ipv6') ) {
             // flush named set
             $this->__exec('nft flush set inet spamhaus drop_ipv6');
         }
         // return
-        return($this->__exec('nft list table inet spamhaus 2> /dev/null'));
+        return($this->__exec('nft list table inet spamhaus'));
 	}
 	public function addElement($ipaddr=null) {
 		list($network, $netmask) = explode('/', $ipaddr, 2);	// split IP address from netmask
 		if (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
-			$this->__exec('nft add element inet spamhaus drop_ipv4 \{ ' . $ipaddr . ' timeout 72h \} 2> /dev/null');
+			$this->__exec('nft add element inet spamhaus drop_ipv4 \{ ' . $ipaddr . ' timeout 72h \}');
 		elseif (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
-			$this->__exec('nft add element inet spamhaus drop_ipv6 \{ ' . $ipaddr . ' timeout 72h \} 2> /dev/null');
-		else
-			echo "invalid IP " . $ipaddr . PHP_EOL;
+			$this->__exec('nft add element inet spamhaus drop_ipv6 \{ ' . $ipaddr . ' timeout 72h \}');
+		else {
+			$this->lastError = "invalid IP " . $ipaddr;
+			echo $this->lastError . PHP_EOL;
+		}
         // return
 	}
 	public function loadJson($URI=null) {
@@ -208,24 +213,34 @@ class spamhaus_DROP
 			#CURLOPT_FILE => CACHEFILE,	// file that the transfer should be written to
 		);
 		curl_setopt_array($curlHandle, $curlOptions);
-		$this->dropList = curl_exec($curlHandle);	// execute
-		$this->curlReturn = curl_getinfo($curlHandle, CURLINFO_RESPONSE_CODE);	// get HTTP status response
-		$this->listTimestamp = curl_getinfo($curlHandle, CURLINFO_FILETIME);	// get file time
-		if ($this->dropList) {
+		$this->dropList = curl_exec($curlHandle);	// execute and store response
+		$responseCode = curl_getinfo($curlHandle, CURLINFO_RESPONSE_CODE);	// get HTTP status 
+		if ($responseCode > $this->curlReturn)
+			$this->curlReturn = $responseCode;	// store only if greater than
+		$fileTime = curl_getinfo($curlHandle, CURLINFO_FILETIME);	// get file time
+		if ($fileTime > $this->listTimestamp)
+			$this->listTimestamp = $fileTime;	// store only if greater than
+		if ($responseCode != 200) {
+				// error handling
+				$this->lastError = curl_error($curlHandle);
+		}
+		elseif ($this->dropList) {
+			// process only if response 200/HTTP_OK and not empty
 			foreach (explode(PHP_EOL, $this->dropList) as $json)			// take each line from json
 				array_push($this->dropListArray, json_decode($json, true));	// append to array
 		}
 		curl_close($curlHandle);
 	}
 	public function loadElements() {
+		$this->prepareRules();	// always prepare rules before loading elements
 		foreach ($this->dropListArray as $element) {
-			if (is_null($element))	continue;
+			if (is_null($element))	continue;	// skip null elements
 			if (array_key_exists("cidr",$element)) {
 				$this->addElement($element["cidr"]);
 			}
 		}
 	}
-	// some check methods
+	// access methods
 	public function getCount() {
 		return(count($this->dropListArray));
 	}
@@ -238,22 +253,55 @@ class spamhaus_DROP
 	public function getOutput() {
 		return($this->lastExecOutput);
 	}
+	public function getStatusCode() {
+		return($this->curlReturn);
+	}
+	public function getTimestamp() {
+		return($this->listTimestamp);
+	}
+	public function getLastError() {
+		return($this->lastError);
+	}
 }
 
-
-//	running from CLI without arguments given
-if ( (PHP_SAPI == "cli" && defined('STDIN')) && $_SERVER['argc'] == 1 ) {
-	$DROP = new spamhaus_DROP();
-	$DROP->prepareRules();
-	$DROP->loadJson();
-	$DROP->loadElements();
-}
-//	running from CLI and arguments given
-elseif ( (PHP_SAPI == "cli" && defined('STDIN')) && $_SERVER['argc'] > 1 ) {
+//	running from CLI
+if ( (PHP_SAPI == "cli" && defined('STDIN')) && $_SERVER['argc'] >= 1 ) {
 	// startet with arguments
-	// error out
-	http_response_code(418);	// 418 I'm a teapot (RFC 2324, RFC 7168)
-	die("Not yet ready " .__FILE__. "" .PHP_EOL);
+	$shortOptions = "h" . "p" . "r" . "c";
+	$longOptions = array('help','prepare','refresh','clear');
+	$options = getopt($shortOptions,$longOptions);
+	// run
+	if (count($options) == 0 || array_key_exists("help",$options) || array_key_exists("h",$options)) {
+		// help
+		echo myName .'/'. myVersion .' '. myComment . PHP_EOL;
+		echo '--help, -h', "\t", 'show this help page', PHP_EOL;
+		echo '--clear, -c', "\t", 'remove netfilter table', PHP_EOL;
+		echo '--prepare, -p', "\t", 'prepare netfilter table', PHP_EOL;
+		echo '--refresh, -r', "\t", 'refresh DROP', PHP_EOL;
+		// error out
+		http_response_code(200);
+		die("Please run " .__FILE__. " with desired options." .PHP_EOL);
+	}
+	else {
+		$DROP = new spamhaus_DROP();
+		if (array_key_exists("refresh",$options) || array_key_exists("r",$options)) {
+			$DROP->loadJson();	// load all lists
+			if ($DROP->getStatusCode() > 200) {
+				// error handling
+				http_response_code($DROP->getStatusCode());
+				die($DROP->getLastError() . PHP_EOL);
+			}
+		}
+		if (array_key_exists("clear",$options) || array_key_exists("c",$options)) {
+			$DROP->deleteRules();	// will remove netfilter table
+		}
+		if (array_key_exists("prepare",$options) || array_key_exists("p",$options)) {
+			$DROP->prepareRules();
+		}
+		if (array_key_exists("refresh",$options) || array_key_exists("r",$options)) {
+			$DROP->loadElements();	// will always prepare rules and/or flush sets
+		}
+	}
 }
 //	check running directly, without being included
 elseif ( $_SERVER['PHP_SELF'] == __FILE__ ) {

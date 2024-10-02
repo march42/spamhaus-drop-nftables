@@ -11,7 +11,19 @@ with [netfilter](https://netfilter.org/) nftables.
 - load current DROP lists from Spamhaus
 - prepare firewall table, chains, rules, ip_addr sets
 - adding elements with timeout (72 hours)
-- running the update every 12 or 24 hours via crontab
+- running the update daily via crontab
+
+## usage
+
+1. Make sure you have netfilter nftables and PHP 8.0-8.3 by running `nft --version` and `php --version`
+1. Load the script to /usr/local/sbin
+`curl --output-dir /usr/local/sbin --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.php`
+2. Load the crontab to /etc/cron.d
+`curl --output-dir /etc/cron.d --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.crontab`
+3. Load and process `php /usr/local/sbin/spamhaus-drop.php --refresh`
+4. Check the added ruleset `nft list table inet spamhaus`
+
+Just running `php /usr/local/sbin/spamhaus-drop.php --refresh` will prepare the netfilter table first.
 
 ## netfilter
 
@@ -108,11 +120,15 @@ List the prerouting filter chain in spamhaus table.
 `nft list chain inet spamhaus postrouting`
 List the postrouting filter chain in spamhaus table.
 
+`nft list table inet spamhaus`
+List the spamhaus ruleset.
+Use option `--terse` omits the named set elements.
+
 ## configuration
 
 *  SPAMHAUS_DROP_noIPV4
 *  SPAMHAUS_DROP_noIPV6
-*  SPAMHAUS_DROP_useTIMEOUT
+*  SPAMHAUS_DROP_noTIMEOUT
 *  SPAMHAUS_DROP_useCOUNTER
 
 ## work-to-do

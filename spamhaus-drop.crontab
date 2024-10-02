@@ -6,5 +6,6 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # 
 # m   h  dom mon dow   user      command
-57  11,23 *   *   *    root      [ -r /usr/local/sbin/spamhaus-drop.php ] && php /usr/local/sbin/spamhaus-drop.php
+#@reboot                root      wait-for-network && php /usr/local/sbin/spamhaus-drop.php --refresh
+@daily                 root      [ -r /usr/local/sbin/spamhaus-drop.php ] && php /usr/local/sbin/spamhaus-drop.php --refresh
 ###
