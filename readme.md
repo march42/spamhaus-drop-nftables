@@ -20,14 +20,14 @@ Just running `php /usr/local/sbin/spamhaus-drop.php --refresh` will load the lis
 
 1. Make sure you have netfilter nftables and PHP 8.0-8.3 by running `nft --version` and `php --version`
 1. Load the script to /usr/local/sbin
-`curl --output-dir /usr/local/sbin --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.php`
+`curl --output-dir /usr/local/sbin --remote-name https://raw.githubusercontent.com/march42/spamhaus-drop-nftables/refs/heads/main/spamhaus-drop.php`
 1. Load and process `php /usr/local/sbin/spamhaus-drop.php --refresh`
 1. Check the added ruleset `nft list table inet spamhaus`
 
 ### running via systemd
 
 1. Load the systemd service and timer files to /etc/systemd/system
-`curl --output-dir /etc/systemd/system --remote-name "https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.{service,timer}"`
+`curl --output-dir /etc/systemd/system --remote-name "https://raw.githubusercontent.com/march42/spamhaus-drop-nftables/refs/heads/main/spamhaus-drop.{service,timer}"`
 1. Reload systemd unit files via `systemctl daemon-reload`
 1. Enable unit files via `systemctl enable spamhaus-drop.service spamhaus-drop.timer`
 1. Prepare and initialize via `systemctl start spamhaus-drop.service spamhaus-drop.timer`
@@ -39,7 +39,7 @@ Just running `php /usr/local/sbin/spamhaus-drop.php --refresh` will load the lis
 
 the updates can be done via crontab, if systemd is not present.
 Just load the crontab to /etc/cron.d
-`curl --output-dir /etc/cron.d --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.crontab`
+`curl --output-dir /etc/cron.d --remote-name https://raw.githubusercontent.com/march42/spamhaus-drop-nftables/refs/heads/main/spamhaus-drop.crontab`
 
 ## netfilter
 
