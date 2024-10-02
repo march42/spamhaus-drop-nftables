@@ -11,8 +11,8 @@ with [netfilter](https://netfilter.org/) nftables.
 - load current DROP lists from Spamhaus
 - prepare firewall table, chains, rules, ip_addr sets
 - adding elements with timeout (72 hours)
-- running the update daily via crontab
-- update could be run via systemd
+- running/update via systemd
+- update could be done via crontab
 
 ## usage
 
@@ -27,7 +27,7 @@ Just running `php /usr/local/sbin/spamhaus-drop.php --refresh` will load the lis
 ### running via systemd
 
 1. Load the systemd service and timer files to /etc/systemd/system
-`curl --output-dir /etc/systemd/system --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.{service,timer}`
+`curl --output-dir /etc/systemd/system --remote-name "https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.{service,timer}"`
 1. Reload systemd unit files via `systemctl daemon-reload`
 1. Enable unit files via `systemctl enable spamhaus-drop.service spamhaus-drop.timer`
 1. Prepare and initialize via `systemctl start spamhaus-drop.service spamhaus-drop.timer`
