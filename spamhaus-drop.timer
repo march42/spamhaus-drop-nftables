@@ -1,0 +1,18 @@
+#   /etc/systemd/system/spamhaus-drop.timer
+
+[Unit]
+#   see https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html
+Description=nftables refresh Spamhaus.org DROP
+Documentation=https://github.com/march42/spamhaus-drop-nftables
+
+[Timer]
+#   see https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html
+#OnActiveSec=27h
+OnBootSec=5min
+OnCalendar=daily
+#RandomizedDelaySec=3h
+Unit=spamhaus-drop.service
+
+[Install]
+#   see https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html
+WantedBy=timers.target

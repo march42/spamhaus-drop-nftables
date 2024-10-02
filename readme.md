@@ -12,18 +12,34 @@ with [netfilter](https://netfilter.org/) nftables.
 - prepare firewall table, chains, rules, ip_addr sets
 - adding elements with timeout (72 hours)
 - running the update daily via crontab
+- update could be run via systemd
 
 ## usage
+
+Just running `php /usr/local/sbin/spamhaus-drop.php --refresh` will load the lists, prepare the netfilter table and add the elements.
 
 1. Make sure you have netfilter nftables and PHP 8.0-8.3 by running `nft --version` and `php --version`
 1. Load the script to /usr/local/sbin
 `curl --output-dir /usr/local/sbin --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.php`
-2. Load the crontab to /etc/cron.d
-`curl --output-dir /etc/cron.d --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.crontab`
-3. Load and process `php /usr/local/sbin/spamhaus-drop.php --refresh`
-4. Check the added ruleset `nft list table inet spamhaus`
+1. Load and process `php /usr/local/sbin/spamhaus-drop.php --refresh`
+1. Check the added ruleset `nft list table inet spamhaus`
 
-Just running `php /usr/local/sbin/spamhaus-drop.php --refresh` will prepare the netfilter table first.
+### running via systemd
+
+1. Load the systemd service and timer files to /etc/systemd/system
+`curl --output-dir /etc/systemd/system --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.{service,timer}`
+1. Reload systemd unit files via `systemctl daemon-reload`
+1. Enable unit files via `systemctl enable spamhaus-drop.service spamhaus-drop.timer`
+1. Prepare and initialize via `systemctl start spamhaus-drop.service spamhaus-drop.timer`
+1. Check your ruleset via `nft list table inet spamhaus`
+1. Check systemd units via `systemctl status spamhaus-drop.service spamhaus-drop.timer`
+1. Check your timer via `systemctl list-timers`
+
+### regularly update via crontab
+
+the updates can be done via crontab, if systemd is not present.
+Just load the crontab to /etc/cron.d
+`curl --output-dir /etc/cron.d --remote-name https://github.com/march42/spamhaus-drop-nftables/raw/refs/heads/main/spamhaus-drop.crontab`
 
 ## netfilter
 

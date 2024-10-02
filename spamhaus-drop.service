@@ -1,0 +1,25 @@
+#   /etc/systemd/system/spamhaus-drop.service
+
+[Unit]
+#   see https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html
+Description=nftables refresh Spamhaus.org DROP
+Documentation=https://github.com/march42/spamhaus-drop-nftables
+Wants=network-online.target nftables.service
+After=network-online.target nftables.service
+StartLimitIntervalSec=1d
+StartLimitBurst=4
+ConditionPathExists=/usr/sbin/nft
+ConditionPathExists=/usr/bin/php
+
+[Service]
+#   see https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/php /usr/local/sbin/spamhaus-drop.php --refresh
+ExecReload=/usr/bin/php /usr/local/sbin/spamhaus-drop.php --refresh
+ExecStop=/usr/bin/php /usr/local/sbin/spamhaus-drop.php --clear
+Restart=no
+
+[Install]
+#   see https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html
+WantedBy=multi-user.target
