@@ -32,7 +32,7 @@ define('myComment', 'load spamhaus DROP to netfilter set, see https://github.com
 **  * configuration variables in environment
 **  SPAMHAUS_DROP_noIPV4
 **  SPAMHAUS_DROP_noIPV6
-**  SPAMHAUS_DROP_useTIMEOUT
+**  SPAMHAUS_DROP_noTIMEOUT
 **  SPAMHAUS_DROP_useCOUNTER
 **	* use as script
 **	php spamhaus-drop.php --help --prepare --refresh --clear
@@ -75,12 +75,17 @@ class spamhaus_DROP
 	**	identify list
 	**	get array of ip ranges
 	*/
-	//	properties
+	//	configuration
 	public $jsonURIs = array(
 		'https://www.spamhaus.org/drop/drop_v4.json',
 		'https://www.spamhaus.org/drop/drop_v6.json',
 		#'https://www.spamhaus.org/drop/asndrop.json',
 	);
+	public $noIPV4 = null;
+	public $noIPV6 = null;
+	public $noTIMEOUT = null;
+	public $useCOUNTER = null;
+	//	properties
 	protected $lastError = false;		// no error
     protected $dropList = null;			// the actual DROP list loaded from URI
     protected $curlReturn = null;		// the returned file time
@@ -90,6 +95,20 @@ class spamhaus_DROP
 	protected $lastExecReturn = null;	// return code for exec calls
 	//	constructor, destructor
 	public function __construct($listURI=null) {
+		// get configured
+		if(array_key_exists('SPAMHAUS_DROP_noIPV4',$_ENV))
+			$this->noIPV4 = ! in_array(array("0","no","NO","false","FALSE"),$_ENV['SPAMHAUS_DROP_noIPV4']);
+		else
+			$this->noIPV4 = ! $this->haveIPv4();
+		if(array_key_exists('SPAMHAUS_DROP_noIPV6',$_ENV))
+			$this->noIPV6 = ! in_array(array("0","no","NO","false","FALSE"),$_ENV['SPAMHAUS_DROP_noIPV6']);
+		else
+			$this->noIPV6 = ! $this->haveIPv6();
+		if(array_key_exists('SPAMHAUS_DROP_noTIMEOUT',$_ENV))
+			$this->noTIMEOUT = ! in_array(array("0","no","NO","false","FALSE"),$_ENV['SPAMHAUS_DROP_noTIMEOUT']);
+		if(array_key_exists('SPAMHAUS_DROP_useCOUNTER',$_ENV))
+			$this->useCOUNTER = ! in_array(array("0","no","NO","false","FALSE"),$_ENV['SPAMHAUS_DROP_noTIMEOUT']);
+		// load given list
 		if($listURI)
 			$this->loadJson($listURI);
 	}
@@ -125,7 +144,7 @@ class spamhaus_DROP
         // check named set does not exist
         if ( ! $this->__exec('nft list set inet spamhaus drop_ipv4') ) {
             // add named set
-            $this->__exec('nft add set inet spamhaus drop_ipv4 \{ type ipv4_addr\; flags interval, timeout\; auto-merge\; comment \"SPAMHAUS do not route or peer\"\; \}');
+            $this->__exec('nft add set inet spamhaus drop_ipv4 \{ type ipv4_addr\; flags interval' . ($this->noTIMEOUT ? '' : ', timeout') . '\; auto-merge\; comment \"SPAMHAUS do not route or peer\"\; \}');
         }
         /*else {
             $this->__exec('nft flush set inet spamhaus drop_ipv4');
@@ -133,7 +152,7 @@ class spamhaus_DROP
         // check named set does not exist
         if ( ! $this->__exec('nft list set inet spamhaus drop_ipv6') ) {
             // add named set
-            $this->__exec('nft add set inet spamhaus drop_ipv6 \{ type ipv6_addr\; flags interval, timeout\; auto-merge\; comment \"SPAMHAUS do not route or peer\"\; \}');
+            $this->__exec('nft add set inet spamhaus drop_ipv6 \{ type ipv6_addr\; flags interval' . ($this->noTIMEOUT ? '' : ', timeout') . '\; auto-merge\; comment \"SPAMHAUS do not route or peer\"\; \}');
         }
         /*else {
             $this->__exec('nft flush set inet spamhaus drop_ipv6');
@@ -143,18 +162,18 @@ class spamhaus_DROP
             // add chain
             $this->__exec('nft add chain inet spamhaus prerouting \{ type filter hook prerouting priority -100\; \}');
             // add rules
-            $this->__exec('nft add rule inet spamhaus prerouting ip saddr @drop_ipv4 counter drop');
-            $this->__exec('nft add rule inet spamhaus prerouting ip daddr @drop_ipv4 counter drop');
-            $this->__exec('nft add rule inet spamhaus prerouting ip6 saddr @drop_ipv6 counter drop');
-            $this->__exec('nft add rule inet spamhaus prerouting ip6 daddr @drop_ipv6 counter drop');
+            $this->__exec('nft add rule inet spamhaus prerouting ip saddr @drop_ipv4 ' . ($this->useCOUNTER ? 'counter' : '') . ' drop');
+            $this->__exec('nft add rule inet spamhaus prerouting ip daddr @drop_ipv4 ' . ($this->useCOUNTER ? 'counter' : '') . ' drop');
+            $this->__exec('nft add rule inet spamhaus prerouting ip6 saddr @drop_ipv6 ' . ($this->useCOUNTER ? 'counter' : '') . ' drop');
+            $this->__exec('nft add rule inet spamhaus prerouting ip6 daddr @drop_ipv6 ' . ($this->useCOUNTER ? 'counter' : '') . ' drop');
         }
         // check chain does not exist
         if ( ! $this->__exec('nft list chain inet spamhaus postrouting') ) {
             // add chain
             $this->__exec('nft add chain inet spamhaus postrouting \{ type filter hook postrouting priority 100\; \}');
             // add rules
-            $this->__exec('nft add rule inet spamhaus postrouting ip daddr @drop_ipv4 counter drop');
-            $this->__exec('nft add rule inet spamhaus postrouting ip6 daddr @drop_ipv6 counter drop');
+            $this->__exec('nft add rule inet spamhaus postrouting ip daddr @drop_ipv4 ' . ($this->useCOUNTER ? 'counter' : '') . ' drop');
+            $this->__exec('nft add rule inet spamhaus postrouting ip6 daddr @drop_ipv6 ' . ($this->useCOUNTER ? 'counter' : '') . ' drop');
         }
         // return
         return($this->__exec('nft list chain inet spamhaus prerouting'));
@@ -175,10 +194,10 @@ class spamhaus_DROP
 	}
 	public function addElement($ipaddr=null) {
 		list($network, $netmask) = explode('/', $ipaddr, 2);	// split IP address from netmask
-		if (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
-			$this->__exec('nft add element inet spamhaus drop_ipv4 \{ ' . $ipaddr . ' timeout 72h \}');
-		elseif (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
-			$this->__exec('nft add element inet spamhaus drop_ipv6 \{ ' . $ipaddr . ' timeout 72h \}');
+		if (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && (! $this->noIPV4))
+			$this->__exec('nft add element inet spamhaus drop_ipv4 \{ ' . $ipaddr . ' ' . ($this->noTIMEOUT ? '' : 'timeout 72h') . ' \}');
+		elseif (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) && (! $this->noIPV6))
+			$this->__exec('nft add element inet spamhaus drop_ipv6 \{ ' . $ipaddr . ' ' . ($this->noTIMEOUT ? '' : 'timeout 72h') . ' \}');
 		else {
 			$this->lastError = "invalid IP " . $ipaddr;
 			echo $this->lastError . PHP_EOL;
@@ -259,6 +278,27 @@ class spamhaus_DROP
 	}
 	public function getLastError() {
 		return($this->lastError);
+	}
+	// helper methods
+	public function haveIPv4() {
+		$addrList = array();
+		$returnCode = null;
+		$command = 'ip address show | grep \'inet \'';
+		if (! exec($command, $addrList, $returnCode)) {
+			// error handling
+			$this->lastError = "exec failed (command " . $command . ", code " . $returnCode . ")";
+		}
+		return(! empty($addrList));
+	}
+	public function haveIPv6() {
+		$addrList = array();
+		$returnCode = null;
+		$command = 'ip address show | grep \'inet6 \'';
+		if (! exec($command, $addrList, $returnCode)) {
+			// error handling
+			$this->lastError = "exec failed (command " . $command . ", code " . $returnCode . ")";
+		}
+		return(! empty($addrList));
 	}
 }
 

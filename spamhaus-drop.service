@@ -15,6 +15,7 @@ ConditionPathExists=/usr/bin/php
 #   see https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
 Type=oneshot
 RemainAfterExit=yes
+Environment=SPAMHAUS_DROP_noIPV4='false' SPAMHAUS_DROP_noIPV6='false' SPAMHAUS_DROP_noTIMEOUT='false' SPAMHAUS_DROP_useCOUNTER='yes'
 ExecStart=/usr/bin/php /usr/local/sbin/spamhaus-drop.php --refresh
 ExecReload=/usr/bin/php /usr/local/sbin/spamhaus-drop.php --refresh
 ExecStop=/usr/bin/php /usr/local/sbin/spamhaus-drop.php --clear
