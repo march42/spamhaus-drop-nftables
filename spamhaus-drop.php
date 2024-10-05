@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('myName', 'spamhaus-drop.php');
-define('myVersion', '20241002');
+define('myVersion', '20241004');
 define('myComment', 'load spamhaus DROP to netfilter set, see https://github.com/march42/spamhaus-drop-nftables');
 
 /**
@@ -24,7 +24,6 @@ define('myComment', 'load spamhaus DROP to netfilter set, see https://github.com
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 /*	spamhaus-drop.php
@@ -54,9 +53,6 @@ if (80000 >= PHP_VERSION_ID || 80400 <= PHP_VERSION_ID) {
 	exit(1);
 }
 
-//	IPv4	extension_loaded('sockets') && defined('AF_INET')
-//	IPv6	extension_loaded('sockets') && defined('AF_INET6')
-
 class spamhaus_DROP
 {
 	/*	DROP list class
@@ -79,7 +75,7 @@ class spamhaus_DROP
 	public $jsonURIs = array(
 		'https://www.spamhaus.org/drop/drop_v4.json',
 		'https://www.spamhaus.org/drop/drop_v6.json',
-		#'https://www.spamhaus.org/drop/asndrop.json',
+		'https://www.spamhaus.org/drop/asndrop.json',
 	);
 	public $noIPV4 = null;
 	public $noIPV6 = null;
@@ -192,7 +188,7 @@ class spamhaus_DROP
         // return
         return($this->__exec('nft list table inet spamhaus'));
 	}
-	public function addElement($ipaddr=null) {
+	public function addElement2nft($ipaddr=null) {
 		list($network, $netmask) = explode('/', $ipaddr, 2);	// split IP address from netmask
 		if (filter_var($network, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && (! $this->noIPV4))
 			$this->__exec('nft add element inet spamhaus drop_ipv4 \{ ' . $ipaddr . ' ' . ($this->noTIMEOUT ? '' : 'timeout 72h') . ' \}');
@@ -250,14 +246,42 @@ class spamhaus_DROP
 	}
 	public function loadElements() {
 		$this->prepareRules();	// always prepare rules before loading elements
+		// prepare bind9 response-policy-zone
+		$fileRPZ = fopen('/etc/bind/response-policy-zone','c');
+		if($fileRPZ) {
+			fwrite($fileRPZ,'$ORIGIN response.policy.zone.' . PHP_EOL);
+			fwrite($fileRPZ,'/*	examples' . PHP_EOL . PHP_EOL);
+			fwrite($fileRPZ,'; destination IP rewrite' . PHP_EOL . 'baddomain1.example.com       A     198.51.100.1' . PHP_EOL . '*.baddomain1.example.com     A     198.51.100.1' . PHP_EOL . PHP_EOL);
+			fwrite($fileRPZ,'; send them to an existing A record' . PHP_EOL . 'baddomain2.example.com       CNAME mywebserver.example.org.' . PHP_EOL . '*.baddoman2.example.com      CNAME mywebserver.example.org.' . PHP_EOL . PHP_EOL);
+			fwrite($fileRPZ,'; NXDOMAIN it' . PHP_EOL . 'baddomain3.example.com       CNAME .' . PHP_EOL . '*.baddomain3.example.com     CNAME .' . PHP_EOL . PHP_EOL);
+			fwrite($fileRPZ,'; reply with NODATA' . PHP_EOL . 'baddomain4.example.com       CNAME *.' . PHP_EOL . '*.baddomain4.example.com     CNAME *.' . PHP_EOL . PHP_EOL);
+			fwrite($fileRPZ,'*/' . PHP_EOL . PHP_EOL);
+		}
+		$fileDROP = fopen('/etc/bind/spamhaus-drop','c');
+		if($fileDROP) {
+			fwrite($fileDROP,'acl spamhaus-drop {' . PHP_EOL);
+		}
+		// walk the entries
 		foreach ($this->dropListArray as $element) {
 			if (is_null($element))	continue;	// skip null elements
 			if (array_key_exists("cidr",$element)) {
-				$this->addElement($element["cidr"]);
+				$this->addElement2nft($element["cidr"]);
+				fwrite($fileDROP,"\t" . $element["cidr"] . ';' . PHP_EOL);
+			}
+			elseif (array_key_exists("domain",$element)) {
+				fwrite($fileRPZ,$element["domain"] . '   CNAME .' . PHP_EOL);
+				fwrite($fileRPZ,'*.' . $element["domain"] . ' CNAME .' . PHP_EOL);
+				fwrite($fileRPZ,PHP_EOL);
 			}
 		}
+		// close bind files
+		fclose($fileRPZ);
+		if($fileDROP) {
+			fwrite($fileDROP,'};' . PHP_EOL);
+			fclose($fileDROP);
+		}
 	}
-	// access methods
+	// access method
 	public function getCount() {
 		return(count($this->dropListArray));
 	}
@@ -281,24 +305,10 @@ class spamhaus_DROP
 	}
 	// helper methods
 	public function haveIPv4() {
-		$addrList = array();
-		$returnCode = null;
-		$command = 'ip address show | grep \'inet \'';
-		if (! exec($command, $addrList, $returnCode)) {
-			// error handling
-			$this->lastError = "exec failed (command " . $command . ", code " . $returnCode . ")";
-		}
-		return(! empty($addrList));
+		return(extension_loaded('sockets') && defined('AF_INET'));
 	}
 	public function haveIPv6() {
-		$addrList = array();
-		$returnCode = null;
-		$command = 'ip address show | grep \'inet6 \'';
-		if (! exec($command, $addrList, $returnCode)) {
-			// error handling
-			$this->lastError = "exec failed (command " . $command . ", code " . $returnCode . ")";
-		}
-		return(! empty($addrList));
+		return(extension_loaded('sockets') && defined('AF_INET6'));
 	}
 }
 
